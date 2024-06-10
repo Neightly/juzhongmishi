@@ -12,9 +12,9 @@ type Game struct {
 	verbose bool   // verbose模式：不仅给出两个选手相遇的轮次，也包括晋级过程中遇到的对手
 }
 
-// New 创建n个选手参加的淘汰赛，n必须是2的幂次且不能是0和1。
+// New 创建n个选手参加的淘汰赛，n必须是2的幂次。
 func New(n uint64) Game {
-	assertf(n > 1 && (n-1)&n == 0, "n(%d) out of range: {2,4,8,16,32,64,128,...}", n)
+	assertf(bits.OnesCount64(n) == 1, "n(%d) must be power of 2", n)
 	return Game{players: n}
 }
 
@@ -36,11 +36,6 @@ func (g Game) assertPlayersInRange(p, q uint64) {
 	assertf(1 <= q && q <= g.players, "q(%d) out of range: [1, %d]", q, g.players)
 }
 
-func (g Game) debug(p, q uint64) {
-	fmt.Printf("%0[4]*[1]b(%[1]d) ^ %0[4]*[2]b(%[2]d) = %0[4]*[3]b\n",
-		p, q, p^q, bits.TrailingZeros64(g.players))
-}
-
 // MatchCloseNext 给出紧邻连续匹配规则下选手p和q相遇的轮次。
 // 如果是verbose模式，ps和qs描述了各自晋级过程中遇到的对手。
 // 自己和自己原则上不允许相遇，在此按第0轮处理。
@@ -57,7 +52,7 @@ func (g Game) MatchCloseNext(p, q uint64) (l uint8, ps, qs []string) {
 }
 
 // optimizedCloseNext 计算p^q可以用几个bit表示，个数越大轮次越大。
-// 譬如0b100/0b101/0b110/0b111都可以用3个bit表示。
+// 譬如0b100/0b101/0b110/0b111都可以用3个bit表示。3代表第3轮。
 func (g Game) optimizedCloseNext(p, q uint64) uint8 {
 	return uint8(bits.Len64(p ^ q))
 }

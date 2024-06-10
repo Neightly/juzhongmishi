@@ -20,12 +20,7 @@ func TestNew(t *testing.T) {
 		{
 			name:   "0",
 			args:   args{0},
-			suffix: "n(0) out of range: {2,4,8,16,32,64,128,...}",
-		},
-		{
-			name:   "1",
-			args:   args{1},
-			suffix: "n(1) out of range: {2,4,8,16,32,64,128,...}",
+			suffix: "n(0) must be power of 2", // panic("... n(0) must be power of 2")
 		},
 		{
 			name: "2**5",
@@ -38,7 +33,7 @@ func TestNew(t *testing.T) {
 		{
 			name:   "even",
 			args:   args{13},
-			suffix: "n(13) out of range: {2,4,8,16,32,64,128,...}",
+			suffix: "n(13) must be power of 2", // panic("... n(13) must be power of 2")
 		},
 	}
 	for _, tt := range tests {
@@ -50,7 +45,7 @@ func TestNew(t *testing.T) {
 						t.Errorf("gamematcher.New() got = %q, want suffix %q", got, tt.suffix)
 					}
 				}()
-				gamematcher.New(tt.args.n)
+				_ = gamematcher.New(tt.args.n)
 			}()
 		})
 	}
@@ -171,5 +166,28 @@ func TestGame_MatchHeadTail(t *testing.T) {
 				t.Errorf("Game.MatchHeadTail() gotQs = %v, want %v", gotQs, tt.wantQs)
 			}
 		})
+	}
+}
+
+func TestGame(t *testing.T) {
+	// 测试在所有的场景中，optimized模式和verbose模式给出的轮次是否一致
+	optimized := gamematcher.New(64)
+	verbose := optimized.Verbose()
+	var l0, l uint8
+	var ps, qs []string
+	for p := uint64(1); p <= 64; p++ {
+		for q := uint64(1); q <= 64; q++ {
+			l0, _, _ = optimized.MatchCloseNext(p, q)
+			l, ps, qs = verbose.MatchCloseNext(p, q)
+			if l0 != l {
+				t.Fatalf("MatchCloseNext(%d, %d) got %d, want %d. details: %v and %v", p, q, l0, l, ps, qs)
+			}
+
+			l0, _, _ = optimized.MatchHeadTail(p, q)
+			l, ps, qs = verbose.MatchHeadTail(p, q)
+			if l0 != l {
+				t.Fatalf("MatchHeadTail(%d, %d) got %d, want %d. details: %v and %v", p, q, l0, l, ps, qs)
+			}
+		}
 	}
 }
