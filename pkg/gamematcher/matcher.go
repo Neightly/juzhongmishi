@@ -50,20 +50,16 @@ func (g Game) MatchCloseNext(p, q uint64) (l uint8, ps, qs []string) {
 		return
 	}
 	if !g.verbose {
-		return g.optimizedCloseNext(p-1, q-1)
+		l = g.optimizedCloseNext(p-1, q-1)
+		return
 	}
 	return g.verboseCloseNext(p-1, q-1)
 }
 
-func (g Game) optimizedCloseNext(p, q uint64) (l uint8, ps, qs []string) {
-	for power := uint64(1); ; power <<= 1 {
-		if xor := p ^ q; (xor-1)&xor == 0 { // is p^q one of [1 2 4 8 16 32 64 ...]?
-			l = uint8(bits.TrailingZeros64(xor)) + 1 // 1-based
-			return
-		}
-		p &^= power
-		q &^= power
-	}
+// optimizedCloseNext 计算p^q可以用几个bit表示，个数越大轮次越大。
+// 譬如0b100/0b101/0b110/0b111都可以用3个bit表示。
+func (g Game) optimizedCloseNext(p, q uint64) uint8 {
+	return uint8(bits.Len64(p ^ q))
 }
 
 func (g Game) verboseCloseNext(p, q uint64) (l uint8, ps, qs []string) {
@@ -101,20 +97,20 @@ func (g Game) MatchHeadTail(p, q uint64) (l uint8, ps, qs []string) {
 		return
 	}
 	if !g.verbose {
-		return g.optimizedHeadTail(p-1, q-1)
+		l = g.optimizedHeadTail(p-1, q-1)
+		return
 	}
 	return g.verboseHeadTail(p-1, q-1)
 }
 
-func (g Game) optimizedHeadTail(p, q uint64) (l uint8, ps, qs []string) {
-	for mask := g.players - 1; ; mask >>= 1 {
-		if xor := p ^ q; xor&(xor+1) == 0 { // is p^q one of [..., 127, 63, 31, 15, 7, 3, 1]?
-			l = uint8(bits.TrailingZeros64(g.players)-bits.TrailingZeros64(xor+1)) + 1 // 1-based
-			return
-		}
-		p = min(p, mask^p)
-		q = min(q, mask^q)
+// optimizedHeadTail 计算p^q尾部连续1的个数或者连续0的个数，个数越大轮次越小。
+// 譬如0b110111尾部有3个1，将其转换为0b111000便于计算。3代表倒数第3轮。
+func (g Game) optimizedHeadTail(p, q uint64) uint8 {
+	xor := p ^ q
+	if xor&0b1 != 0 {
+		xor++
 	}
+	return uint8(bits.Len64(g.players) - bits.TrailingZeros64(xor))
 }
 
 func (g Game) verboseHeadTail(p, q uint64) (l uint8, ps, qs []string) {
