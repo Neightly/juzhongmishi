@@ -9,25 +9,12 @@ import (
 // Game 表示若干选手参加的淘汰赛
 type Game struct {
 	players uint64 // 数量必须是2的幂次
-	verbose bool   // verbose模式：不仅给出两个选手相遇的轮次，也包括晋级过程中遇到的对手
 }
 
 // New 创建n个选手参加的淘汰赛，n必须是2的幂次。
 func New(n uint64) Game {
 	assertf(bits.OnesCount64(n) == 1, "n(%d) must be power of 2", n)
 	return Game{players: n}
-}
-
-// Verbose 设置verbose模式：不仅给出两个选手相遇的轮次，也包括晋级过程中遇到的对手。
-func (g Game) Verbose() Game {
-	g.verbose = true
-	return g
-}
-
-// Reset 清除verbose模式：仅给出两个选手相遇的轮次，不计算遇到的对手可简化操作。
-func (g Game) Reset() Game {
-	g.verbose = false
-	return g
 }
 
 // assertPlayersInRange 保证p和q不超出范围：譬如128人的比赛不允许出现150号选手。
@@ -37,18 +24,14 @@ func (g Game) assertPlayersInRange(p, q uint64) {
 }
 
 // MatchCloseNext 给出紧邻连续匹配规则下选手p和q相遇的轮次。
-// 如果是verbose模式，ps和qs描述了各自晋级过程中遇到的对手。
+// p和q必须具有合法编号：譬如128人的比赛不允许出现150号选手。
 // 自己和自己原则上不允许相遇，在此按第0轮处理。
-func (g Game) MatchCloseNext(p, q uint64) (l uint8, ps, qs []string) {
+func (g Game) MatchCloseNext(p, q uint64) uint8 {
 	g.assertPlayersInRange(p, q)
 	if p == q {
-		return
+		return 0
 	}
-	if !g.verbose {
-		l = g.optimizedCloseNext(p-1, q-1)
-		return
-	}
-	return g.verboseCloseNext(p-1, q-1)
+	return g.optimizedCloseNext(p-1, q-1) // p and q => 0-based
 }
 
 // optimizedCloseNext 计算p^q可以用几个bit表示，个数越大轮次越大。
@@ -57,45 +40,15 @@ func (g Game) optimizedCloseNext(p, q uint64) uint8 {
 	return uint8(bits.Len64(p ^ q))
 }
 
-func (g Game) verboseCloseNext(p, q uint64) (l uint8, ps, qs []string) {
-	var p0, q0 = p, q // 记录原始值备用
-	var p1, q1 uint64 // 对手值
-	for power := uint64(1); ; power <<= 1 {
-		l++
-		p1, q1 = p^power, q^power
-		if p^q == power {
-			ps = append(ps, fmt.Sprintf("%d:%d(%d)", p+1, p1+1, q0+1))
-			qs = append(qs, fmt.Sprintf("%d:%d(%d)", q+1, q1+1, p0+1))
-			return
-		}
-		if p1 < p { // 下克上
-			ps = append(ps, fmt.Sprintf("%d:<-%d", p+1, p1+1))
-			p = p1
-		} else {
-			ps = append(ps, fmt.Sprintf("%d:->%d", p+1, p1+1))
-		}
-		if q1 < q { // 下克上
-			qs = append(qs, fmt.Sprintf("%d:<-%d", q+1, q1+1))
-			q = q1
-		} else {
-			qs = append(qs, fmt.Sprintf("%d:->%d", q+1, q1+1))
-		}
-	}
-}
-
 // MatchHeadTail 给出首尾对称匹配规则下选手p和q相遇的轮次。
-// 如果是verbose模式，ps和qs描述了各自晋级过程中遇到的对手。
+// p和q必须具有合法编号：譬如128人的比赛不允许出现150号选手。
 // 自己和自己原则上不允许相遇，在此按第0轮处理。
-func (g Game) MatchHeadTail(p, q uint64) (l uint8, ps, qs []string) {
+func (g Game) MatchHeadTail(p, q uint64) uint8 {
 	g.assertPlayersInRange(p, q)
 	if p == q {
-		return
+		return 0
 	}
-	if !g.verbose {
-		l = g.optimizedHeadTail(p-1, q-1)
-		return
-	}
-	return g.verboseHeadTail(p-1, q-1)
+	return g.optimizedHeadTail(p-1, q-1) // p and q => 0-based
 }
 
 // optimizedHeadTail 计算p^q尾部连续1的个数或者连续0的个数，个数越大轮次越小。
@@ -106,32 +59,6 @@ func (g Game) optimizedHeadTail(p, q uint64) uint8 {
 		xor++
 	}
 	return uint8(bits.Len64(g.players) - bits.TrailingZeros64(xor))
-}
-
-func (g Game) verboseHeadTail(p, q uint64) (l uint8, ps, qs []string) {
-	var p0, q0 = p, q // 记录原始值备用
-	var p1, q1 uint64 // 对手值
-	for mask := g.players - 1; ; mask >>= 1 {
-		l++
-		p1, q1 = mask^p, mask^q
-		if p^q == mask {
-			ps = append(ps, fmt.Sprintf("%d:%d(%d)", p+1, p1+1, q0+1))
-			qs = append(qs, fmt.Sprintf("%d:%d(%d)", q+1, q1+1, p0+1))
-			return
-		}
-		if p1 < p { // 下克上
-			ps = append(ps, fmt.Sprintf("%d:<-%d", p+1, p1+1))
-			p = p1
-		} else {
-			ps = append(ps, fmt.Sprintf("%d:->%d", p+1, p1+1))
-		}
-		if q1 < q { // 下克上
-			qs = append(qs, fmt.Sprintf("%d:<-%d", q+1, q1+1))
-			q = q1
-		} else {
-			qs = append(qs, fmt.Sprintf("%d:->%d", q+1, q1+1))
-		}
-	}
 }
 
 func assertf(p bool, format string, args ...any) {
